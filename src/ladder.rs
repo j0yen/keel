@@ -10,7 +10,7 @@ use crate::types::{Ladder, TierConfig, TierKind};
 ///
 /// This is the full list before skip/max filtering is applied.
 /// Used by `pulse.rs` to reconstruct the Skipped/Unconfigured entries
-/// that resolve_ladder would have removed.
+/// that `resolve_ladder` would have removed.
 #[must_use]
 pub fn all_default_tiers() -> Vec<TierConfig> {
     default_tiers()

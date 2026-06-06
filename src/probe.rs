@@ -98,14 +98,10 @@ impl TierProbe for HttpProbe {
 
                 let status = match result {
                     Ok(_) => TierStatus::Reachable,
-                    Err(ureq::Error::Status(401, _)) | Err(ureq::Error::Status(403, _)) => {
-                        TierStatus::Unreachable {
-                            reason: "auth rejected (401/403)".to_string(),
-                        }
-                    }
-                    Err(ureq::Error::Status(429, _)) | Err(ureq::Error::Status(402, _)) => {
-                        TierStatus::Exhausted
-                    }
+                    Err(ureq::Error::Status(401 | 403, _)) => TierStatus::Unreachable {
+                        reason: "auth rejected (401/403)".to_string(),
+                    },
+                    Err(ureq::Error::Status(429 | 402, _)) => TierStatus::Exhausted,
                     Err(ureq::Error::Status(code, _)) => TierStatus::Unreachable {
                         reason: format!("HTTP {code}"),
                     },
@@ -198,7 +194,7 @@ impl FakeProbe {
     /// while holding the lock — benign in single-threaded test contexts).
     #[must_use]
     pub fn recorded_calls(&self) -> Vec<ProbeCall> {
-        self.calls.lock().unwrap_or_else(|p| p.into_inner()).clone()
+        self.calls.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone()
     }
 }
 
@@ -228,7 +224,7 @@ impl TierProbe for FakeProbe {
         // Only panics if another test thread panicked while holding the lock
         self.calls
             .lock()
-            .unwrap_or_else(|p| p.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .push(call);
 
         let status = self

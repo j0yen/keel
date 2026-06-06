@@ -9,13 +9,13 @@ use crate::types::{TierHealth, TierStatus};
 pub enum OutputFormat {
     /// Human-readable table.
     Table,
-    /// Machine-readable JSON (one TierHealth per configured tier).
+    /// Machine-readable JSON (one [`TierHealth`] per configured tier).
     Json,
 }
 
 /// Run the pulse check against the ladder.
 ///
-/// Returns the list of `TierHealth` values (one per *configured* tier,
+/// Returns the list of [`TierHealth`] values (one per *configured* tier,
 /// including Skipped tiers which are not probed).
 pub fn run_pulse(probe: &dyn TierProbe, env: &dyn ProbeEnv) -> Vec<TierHealth> {
     let skip = env.skip_tiers();
@@ -63,10 +63,11 @@ pub fn run_pulse(probe: &dyn TierProbe, env: &dyn ProbeEnv) -> Vec<TierHealth> {
 /// # Errors
 ///
 /// Returns an error if serialization fails (JSON format only).
+#[allow(clippy::print_stdout)]
 pub fn print_pulse(results: &[TierHealth], format: OutputFormat) -> Result<i32, String> {
     match format {
         OutputFormat::Table => {
-            println!("{:<15} {:<15} {:<12} {}", "TIER", "STATUS", "CHECKED", "FAILS");
+            println!("{:<15} {:<15} {:<12} FAILS", "TIER", "STATUS", "CHECKED");
             println!("{}", "-".repeat(55));
             for h in results {
                 let status_str = match &h.status {

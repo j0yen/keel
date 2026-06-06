@@ -25,6 +25,7 @@ enum Commands {
     },
 }
 
+#[allow(clippy::print_stderr)]
 fn main() -> std::process::ExitCode {
     // SIGPIPE safety: self_sigpipe_panic_toolkit — `keel pulse | head` must not panic.
     sigpipe::reset();
@@ -33,8 +34,8 @@ fn main() -> std::process::ExitCode {
 
     match cli.command {
         Commands::Pulse { format } => {
-            let probe = HttpProbe::default();
-            let env = SystemEnv::default();
+            let probe = HttpProbe;
+            let env = SystemEnv;
             let results = run_pulse(&probe, &env);
             match print_pulse(&results, format) {
                 Ok(code) => {
