@@ -1,0 +1,10 @@
+{
+  "AC1": "tests/acceptance_ac1.rs::probe_makes_zero_real_connections",
+  "AC2": "tests/acceptance_ac2.rs::{tier_status_roundtrip,tier_health_roundtrip,ledger_entry_roundtrip,tier_config_roundtrip,ladder_roundtrip}",
+  "AC3": "tests/acceptance_ac3.rs::{skipped_tier_appears_with_skipped_status_and_is_not_probed,json_output_one_entry_per_tier}",
+  "AC4": "tests/acceptance_ac4.rs::cloud_tier_with_no_key_yields_keyless_no_socket",
+  "AC5": "tests/acceptance_ac5.rs::{reachable_local_tier_returns_reachable,unreachable_local_tier_returns_unreachable,probe_path_is_models_not_completions}",
+  "AC6": "tests/acceptance_ac6.rs::{exit_zero_when_top_tier_reachable,exit_nonzero_when_top_tier_unreachable}",
+  "AC7": "tests/acceptance_ac7.rs::sigpipe_crate_is_present",
+  "AC8": "tests/acceptance_ac8.rs::readme_exists_and_documents_key_types"
+}

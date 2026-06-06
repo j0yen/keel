@@ -1,0 +1,123 @@
+{
+  "schema": "autobuilder.intent_card.v1",
+  "prd_source": "/home/jsy/wintermute/autobuilder/PRD-keel-pulse.md",
+  "intent_slug": "keel-pulse",
+  "root_motivation": "The brain's tier ladder has no cheap reachability + auth probe: it discovers dead tiers by attempting them (incurring latency, billing, and auth errors). keel-pulse adds a zero-cost, non-generating health check — and the shared types every future keel/* subcommand extends — so any code or human can get a one-glance ladder health table without ever dispatching a completion.",
+  "user_persona": "Joe Yen running wintermute on an Arch laptop where wm-brain's tier ladder silently degrades on misconfigured cloud tiers; also the /self-review automation that re-derives cloud reachability by hand every run.",
+  "unfakeable_metric": {
+    "name": "acceptance_tests_passing_count",
+    "lower_is_better": false,
+    "harness_command": "bash scripts/run-metrics.sh",
+    "target": 8
+  },
+  "acceptance_criteria": [
+    {
+      "id": "AC1",
+      "level": "MUST",
+      "description": "cargo build and cargo test succeed offline (no live network). A test asserts the probe path makes zero real outbound connections (FakeProbe only).",
+      "test": "tests/acceptance_ac1.rs: builds offline; FakeProbe records no real connect calls."
+    },
+    {
+      "id": "AC2",
+      "level": "MUST",
+      "description": "TierStatus, TierHealth, LedgerEntry, Ladder, TierConfig are public and serde-(de)serializable; a round-trip test covers each.",
+      "test": "tests/acceptance_ac2.rs: serde round-trip for all five core types."
+    },
+    {
+      "id": "AC3",
+      "level": "MUST",
+      "description": "keel pulse --format json emits one TierHealth per configured tier; with WM_BRAIN_SKIP_TIERS=local-8b set (via ProbeEnv fixture) that tier appears with status Skipped and is not probed.",
+      "test": "tests/acceptance_ac3.rs: JSON output has exactly the configured tiers; skipped tier present with status=Skipped."
+    },
+    {
+      "id": "AC4",
+      "level": "MUST",
+      "description": "A cloud TierConfig with no key (empty WM_ANTHROPIC_KEY) yields status Keyless without the probe opening a socket (FakeProbe records no connect attempt for that tier).",
+      "test": "tests/acceptance_ac4.rs: keyless tier → Keyless status, FakeProbe connect_count == 0 for that tier."
+    },
+    {
+      "id": "AC5",
+      "level": "MUST",
+      "description": "A local TierConfig whose endpoint refuses connection yields Unreachable{reason}; a reachable one yields Reachable. The probe uses a non-generating endpoint (FakeProbe sees /v1/models-class path, never /v1/chat/completions).",
+      "test": "tests/acceptance_ac5.rs: refused → Unreachable; reachable → Reachable; path checked is /v1/models not /v1/chat/completions."
+    },
+    {
+      "id": "AC6",
+      "level": "MUST",
+      "description": "keel pulse exits non-zero when the top configured tier is not Reachable, zero otherwise; covered by two integration cases.",
+      "test": "tests/acceptance_ac6.rs: exit code 0 when top=Reachable, exit code 1 when top=Unreachable/Keyless."
+    },
+    {
+      "id": "AC7",
+      "level": "MUST",
+      "description": "keel pulse | head -1 does not panic (SIGPIPE reset verified by a test that closes the read end early).",
+      "test": "tests/acceptance_ac7.rs: process survives early pipe close — no SIGPIPE panic."
+    },
+    {
+      "id": "AC8",
+      "level": "MUST",
+      "description": "README documents the type surface and the TierProbe/ProbeEnv traits so keel-ledger/cordon/beacon have a contract to extend.",
+      "test": "tests/acceptance_ac8.rs: README.md exists and contains TierProbe, ProbeEnv, TierHealth, LedgerEntry, Ladder."
+    }
+  ],
+  "scope": [
+    "New cargo workspace at ~/wintermute/keel with a keel binary crate",
+    "Core shared types: TierStatus enum, TierHealth struct, LedgerEntry struct, Ladder struct, TierConfig struct",
+    "TierProbe trait: fn probe(&self, tier: &TierConfig) -> TierHealth",
+    "ProbeEnv trait: reads WM_ANTHROPIC_KEY, WM_BRAIN_SKIP_TIERS, WM_BRAIN_MAX_TIER, endpoint URLs from env/config",
+    "FakeProbe and FakeProbeEnv test doubles (in tests/ or #[cfg(test)])",
+    "keel pulse subcommand: prints table of tier|status|checked|fails",
+    "keel pulse --format json: machine-readable JSON output",
+    "Exit code: 0 if top tier Reachable, non-zero otherwise",
+    "SIGPIPE safety via sigpipe::reset() in main()",
+    "README with type surface contract for sibling crates"
+  ],
+  "non_goals": [
+    "No actual completion requests or token generation — the probe never hits /v1/chat/completions",
+    "No writing or reading LedgerEntry data (keel-ledger PRD owns that); LedgerEntry is declared here but not persisted",
+    "No modifying the brain's runtime ladder — read-only config inspection only",
+    "No network probing in the default test suite — FakeProbe only, zero real network",
+    "No integration with agorabus or any other wintermute bus — standalone CLI only",
+    "No authentication token refresh or key rotation — Keyless detection only"
+  ],
+  "hard_constraints": {
+    "rust_edition": "2024",
+    "target_kind": "cli",
+    "deny_unsafe": true,
+    "max_deps": 8,
+    "msrv": "1.85",
+    "additional": {
+      "no_let_chains": "true — MSRV 1.85 predates let-chain stabilization",
+      "sigpipe_reset": "true — sigpipe::reset() must be first line of main()",
+      "no_real_network_in_tests": "true — FakeProbe only; cargo test must pass offline"
+    }
+  },
+  "five_whys_trace": [
+    {
+      "why": 1,
+      "q": "Why do you need a health probe for the brain's tier ladder?",
+      "a": "Because the ladder discovers dead tiers by attempting them — paying latency and potential billing — rather than checking upfront."
+    },
+    {
+      "why": 2,
+      "q": "Why does discovery-by-attempt cause real pain?",
+      "a": "docket wm-anthropic-key-empty has 6 runs and 8 reports since 2026-05-30; every self-review re-derives 'cloud tier unreachable' by hand because nothing computes it on demand."
+    },
+    {
+      "why": 3,
+      "q": "Why does re-deriving it by hand matter — can't we just check once?",
+      "a": "There is no shared type for the answer. Ladder, TierHealth, TierStatus don't exist as reusable types — every check is ad-hoc. sibling PRDs (keel-ledger, keel-cordon, keel-beacon) all need the same types and can't start without a corpus."
+    }
+  ],
+  "ambiguities_resolved": [
+    {
+      "question": "Should keel be a library crate or a binary crate?",
+      "resolution": "Binary crate (cli) per PRD. Library surface is exposed via pub mod so siblings can rust-extend it."
+    },
+    {
+      "question": "What HTTP client for local probe?",
+      "resolution": "ureq (sync, minimal) matching wm-local-llm's choice. Keeps dep count low and offline tests trivial."
+    }
+  ],
+  "created_at": "2026-06-05T00:00:00Z"
+}

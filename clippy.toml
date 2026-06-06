@@ -1,0 +1,2 @@
+# keel clippy.toml — mirrors the scaffold template
+cognitive-complexity-threshold = 15

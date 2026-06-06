@@ -1,0 +1,37 @@
+# proof-lanes.toml — maps source paths to proof lanes.
+# Every changed path in a Stage 3 iteration must resolve to ≥1 lane.
+
+[[lanes]]
+id = "types"
+paths = ["src/types.rs"]
+checks = ["cargo test --test acceptance_ac2", "cargo test proptest_invariants"]
+
+[[lanes]]
+id = "probe"
+paths = ["src/probe.rs"]
+checks = ["cargo test --test acceptance_ac1", "cargo test --test acceptance_ac4", "cargo test --test acceptance_ac5"]
+
+[[lanes]]
+id = "ladder"
+paths = ["src/ladder.rs"]
+checks = ["cargo test --test acceptance_ac3"]
+
+[[lanes]]
+id = "pulse"
+paths = ["src/pulse.rs"]
+checks = ["cargo test --test acceptance_ac3", "cargo test --test acceptance_ac6"]
+
+[[lanes]]
+id = "main"
+paths = ["src/main.rs"]
+checks = ["cargo build", "cargo test --test acceptance_ac7"]
+
+[[lanes]]
+id = "docs"
+paths = ["README.md"]
+checks = ["cargo test --test acceptance_ac8"]
+
+[[lanes]]
+id = "all"
+paths = ["src/lib.rs", "Cargo.toml"]
+checks = ["cargo check --workspace", "cargo clippy --workspace -- -D warnings", "cargo test --workspace"]
