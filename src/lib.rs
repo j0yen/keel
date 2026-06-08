@@ -16,7 +16,9 @@
 //! let _exit = print_pulse(&results, OutputFormat::Table).unwrap();
 //! ```
 
+pub mod beacon;
 pub mod ladder;
 pub mod probe;
 pub mod pulse;
+pub mod status;
 pub mod types;
