@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.0 — 2026-06-12
+
+Dynamic cordon decisions using pulse+ledger health: skip known-dead cloud tiers with exponential cooldown and half-open probe.
+
 ## v0.2.0 — 2026-06-12
 
 Append-only spend ledger: record/spend/mark subcommands, NDJSON store, tier-status stamping, warn-at threshold.
