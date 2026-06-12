@@ -18,7 +18,10 @@
 
 pub mod beacon;
 pub mod ladder;
+pub mod ledger;
+pub mod mark;
 pub mod probe;
 pub mod pulse;
+pub mod spend;
 pub mod status;
 pub mod types;

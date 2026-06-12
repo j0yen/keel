@@ -61,3 +61,4 @@ ureq = { version = "2", default-features = false, features = ["native-tls"] }
 
 [dev-dependencies]
 proptest = "1"
+tempfile = "3"
