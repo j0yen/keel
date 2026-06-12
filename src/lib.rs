@@ -17,6 +17,7 @@
 //! ```
 
 pub mod beacon;
+pub mod cordon;
 pub mod ladder;
 pub mod ledger;
 pub mod mark;
