@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.0 — 2026-06-12
+
+Append-only spend ledger: record/spend/mark subcommands, NDJSON store, tier-status stamping, warn-at threshold.
+
 All notable changes to this project will be documented in this file.
 
 ## v0.1.0 (2026-06-08)
