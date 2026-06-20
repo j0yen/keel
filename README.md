@@ -1,13 +1,24 @@
 # keel
 
-Brain tier-ladder health probe and shared types for the wintermute keel fleet.
+A health probe for the wintermute brain's tier ladder — it tells you which model tier the brain can actually reach right now, without spending a token to find out.
 
-## What this does
+## Why it exists
 
-`keel pulse` prints a one-glance health table for the configured brain tier ladder,
-answering "can the brain even reach this tier?" without dispatching a completion request
-or incurring billing. It probes reachability and auth using non-generating endpoints
-(`/v1/models`) only.
+The wintermute brain runs on a ladder of model tiers, local-3b at the bottom up through opus at the top, and falls down a rung when a tier is unreachable or out of budget. The hard question at any moment is "what rung are we standing on?" The naive way to answer it — send a completion and see what happens — costs money and confuses billing with reachability. `keel` answers it for free: it probes the non-generating endpoints (`GET /v1/models`) and infers the ceiling from reachability and auth alone. A completion request is never sent.
+
+## Install
+
+```
+cargo install --path .
+```
+
+Requires Rust ≥ 1.85 (edition 2024). Tests run offline — `cargo test` touches no sockets.
+
+## Commands
+
+Three subcommands read the same ladder; they differ in what they report.
+
+### `keel pulse` — the full table
 
 ```
 $ keel pulse
@@ -20,122 +31,57 @@ sonnet          keyless         1717..       0
 opus            keyless         1717..       0
 
 $ keel pulse --format json
-[
-  { "tier": "local-3b", "status": { "status": "reachable" }, ... },
-  ...
-]
+[ { "tier": "local-3b", "status": { "status": "reachable" }, ... }, ... ]
 ```
 
-Exit code: **0** if the top configured tier is `Reachable`, **non-zero** otherwise.
-This lets hooks and self-review scripts gate on it directly.
+Exit code is **0** when the top configured tier is `Reachable`, non-zero otherwise — so a hook or self-review script can gate on it directly.
 
-## Type surface contract
+### `keel status` — the one-liner
 
-These types are declared in the foundational `keel` crate. Sibling crates
-(`keel-ledger`, `keel-cordon`, `keel-beacon`) extend them without redefining.
+Answers "what tier is the brain on, and for how long?"
 
-### `TierStatus`
+```
+$ keel status
+floored: local-3b for 4d 6h (cloud keyless since 2026-05-30)
 
-```rust
-pub enum TierStatus {
-    Reachable,
-    Unreachable { reason: String },
-    Keyless,
-    Exhausted,
-    Unconfigured,
-    Skipped,
-}
+$ keel status        # when the full ladder is up
+nominal: opus reachable
 ```
 
-### `TierHealth`
+With `--state-file <path>` (or `WM_KEEL_STATE_FILE`), `status` reads the persisted ceiling to report how long the current rung has held. Exit code is 0 when nominal, non-zero when floored. JSON via `--format json`.
 
-```rust
-pub struct TierHealth {
-    pub tier: String,
-    pub status: TierStatus,
-    pub checked_at: i64,          // Unix seconds
-    pub consecutive_failures: u32,
-}
-```
+### `keel beacon` — emit a change event
 
-### `LedgerEntry`
+Diffs the current effective ceiling against the last one written to the state file and, when it moves, publishes `wm.keel.degraded` or `wm.keel.refloat` to agorabus over its Unix socket (default `~/.cache/agorabus/sock`). Run it on a timer to get notified when the brain drops a rung or recovers one. Requires `--state-file` or `WM_KEEL_STATE_FILE`.
 
-Declared here (schema owner); written and read by `keel-ledger`. `keel pulse`
-does not persist or query ledger entries.
+## The ladder
 
-```rust
-pub struct LedgerEntry {
-    pub tier: String,
-    pub tokens_in: u64,
-    pub tokens_out: u64,
-    pub est_cost_usd: f64,
-    pub ts: i64,
-}
-```
+The default ladder, lowest to highest: `local-3b`, `local-8b` (both Ollama on `localhost:11434`), then `haiku`, `sonnet`, `opus` (Anthropic API). Local tiers probe `GET /v1/models`; cloud tiers short-circuit to `Keyless` when `WM_ANTHROPIC_KEY` is absent, since an unkeyed cloud tier is unreachable in practice.
 
-### `Ladder`
-
-The resolved list of configured tiers after applying `WM_BRAIN_SKIP_TIERS`
-and `WM_BRAIN_MAX_TIER`. All keel subcommands agree on the rungs via this type.
-
-```rust
-pub struct Ladder {
-    pub tiers: Vec<TierConfig>,
-}
-```
-
-### `TierConfig`
-
-```rust
-pub struct TierConfig {
-    pub name: String,
-    pub kind: TierKind,    // Local | Cloud
-    pub endpoint: String,
-}
-```
-
-## Traits
-
-### `TierProbe`
-
-```rust
-pub trait TierProbe: Send + Sync {
-    fn probe(&self, tier: &TierConfig, env: &dyn ProbeEnv) -> TierHealth;
-}
-```
-
-Implementations: `HttpProbe` (real, uses `ureq`), `FakeProbe` (test double — no sockets).
-
-The probe **never** calls `/v1/chat/completions`. Local tiers use `GET /v1/models`.
-Cloud tiers short-circuit to `Keyless` when `WM_ANTHROPIC_KEY` is absent.
-
-### `ProbeEnv`
-
-```rust
-pub trait ProbeEnv: Send + Sync {
-    fn anthropic_key(&self) -> Option<String>;
-    fn skip_tiers(&self) -> Vec<String>;
-    fn max_tier(&self) -> Option<String>;
-}
-```
-
-Implementations: `SystemEnv` (reads real env vars), `FakeProbeEnv` (test fixture).
-
-## Environment variables
-
-| Variable | Default | Description |
+| Variable | Default | Effect |
 |---|---|---|
-| `WM_ANTHROPIC_KEY` | (unset) | Anthropic API key; empty → cloud tiers report `Keyless` |
-| `WM_BRAIN_SKIP_TIERS` | (none) | Comma-separated tier names to exclude from the ladder |
-| `WM_BRAIN_MAX_TIER` | (none) | Highest tier to include; tiers above this are `Unconfigured` |
+| `WM_ANTHROPIC_KEY` | unset | Empty → cloud tiers report `Keyless` |
+| `WM_BRAIN_SKIP_TIERS` | none | Comma-separated tier names to drop from the ladder |
+| `WM_BRAIN_MAX_TIER` | none | Highest tier to include; everything above is excluded |
+| `WM_KEEL_STATE_FILE` | `~/.local/share/keel/last-ceiling.json` | Where `status`/`beacon` persist the last ceiling |
 
-## Building
+## Type surface
 
-```
-cargo build --release
-```
+`keel` is also the foundational crate of its fleet: it owns the shared types, and sibling crates (`keel-ledger`, `keel-cordon`, `keel-beacon`) extend them rather than redefine them. The names below are the contract those siblings depend on.
 
-Requires Rust ≥ 1.85. No network access needed for tests (`cargo test` is offline-safe).
+- **`TierStatus`** — `Reachable | Unreachable { reason } | Keyless | Exhausted | Unconfigured | Skipped`.
+- **`TierHealth`** — `{ tier, status, checked_at: i64, consecutive_failures: u32 }`.
+- **`LedgerEntry`** — `{ tier, tokens_in, tokens_out, est_cost_usd, ts }`. Schema owned here; written and read by `keel-ledger`. `keel pulse` neither persists nor queries it.
+- **`Ladder` / `TierConfig`** — the resolved rungs after skip/max filtering. Every subcommand agrees on the ladder through this type.
+
+Two traits make the probe testable without sockets:
+
+- **`TierProbe`** — `HttpProbe` (real, `ureq`) and `FakeProbe` (test double). The probe never calls `/v1/chat/completions`.
+- **`ProbeEnv`** — `SystemEnv` (reads real env vars) and `FakeProbeEnv` (test fixture).
+
+## Where it fits
+
+`keel` is the health-and-types floor for the keel fleet of wintermute brain crates. `keel-ledger` records token spend against the `LedgerEntry` schema declared here; `keel-beacon`/`keel-cordon` consume the same tier types.
 
 ## License
 
